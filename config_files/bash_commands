@@ -1,0 +1,11 @@
+# ArduPilot commands: Make sure your virtual enviroment is active while doing these commands. It
+# should say (venv-ardupilot) before your username if it is active. Otherwise, reopen your terminal.
+## Runs a regular degular plane at Apollo 11 airport with the proper parameterfile. Use PlaneTest
+## waypoints for this SITL instance
+alias arduSimPlane="sim_vehicle.py -v ArduPlane -w -L APOLLO11P --add-param-file=/home/$USER/.config/ardupilot/Autolanding.param"
+## Runs a quadplane frame SITL instance at Apollo 11 airport. Use the QuadTest waypoints.
+alias arduSimQuad="sim_vehicle.py -v ArduPlane -f quadplane -w -L APOLLO11P"
+## Runs a rover SITL instance at Apollo 11 airport. Made to be run alongside ONE of the other 2
+## plane instances (noted by the -I 1). Make use to use the Connections1 file to connect both
+## instances to Mission Planner
+alias arduSimRover="sim_vehicle.py -v Rover -w -I 1 -L APOLLO11R"
