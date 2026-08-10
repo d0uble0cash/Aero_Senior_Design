@@ -9,3 +9,9 @@ alias arduSimQuad="sim_vehicle.py -v ArduPlane -f quadplane -w -L APOLLO11P"
 ## plane instances (noted by the -I 1). Make use to use the Connections1 file to connect both
 ## instances to Mission Planner
 alias arduSimRover="sim_vehicle.py -v Rover -w -I 1 -L APOLLO11R"
+
+# Enviroment commands
+## For activating the ardu enviroment (assuming you have the SITL enviroment setup)
+alias aEnvArdu=". ~/venv-ardupilot/bin/activate"
+## For activating my scripting enviroment (assuming you have this repo cloned in a repos folder)
+alias aEnvScripts=". ~/repos/Aero_Senior_Design/scripts/.venv_scripts/bin/activate"
