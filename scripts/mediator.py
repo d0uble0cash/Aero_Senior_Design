@@ -73,7 +73,7 @@ def find_payload_place_seq(master, timeout=10) -> int:
 
 # Pulse the RC channel mapped to RCx_OPTION=173 (payload place abort) high, then release it back to
 # no-override. Simulates flipping a switch on a remote control
-def trigger_abort(master, channel: int, hold_seconds: float = 1.0, num_channels: int = 8):
+def trigger_abort(master, channel: int, hold_seconds: float = 1.0, num_channels: int = 18):
     values = [0] * num_channels
     values[channel - 1] = 2000  # "high" position
  
@@ -95,3 +95,80 @@ def trigger_aligner_start():
 # Currently returns just false since I don't have any logic for this yet
 def check_latch_status() -> bool:
     return False
+
+
+# ---- Main ----
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ip", default="127.0.0.1")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--payload-place-seq", type=int, default=None,
+                         help="Mission seq of NAV_VTOL_PAYLOAD_PLACE item. Auto-detected if omitted.")
+    parser.add_argument("--abort-rc-channel", type=int, default=9,
+                         help="RC channel number mapped to RCx_OPTION=173.")
+    parser.add_argument("--latch-timeout", type=float, default=30.0,
+                         help="Seconds to wait for latch confirmation once landed.")
+    args = parser.parse_args()
+ 
+    master = connect(args.ip, args.port)
+ 
+    request_message_interval(master, mavutil.mavlink.MAVLINK_MSG_ID_EXTENDED_SYS_STATE, hz=2)
+    request_message_interval(master, mavutil.mavlink.MAVLINK_MSG_ID_MISSION_CURRENT, hz=2)
+ 
+    payload_place_seq = args.payload_place_seq
+    if payload_place_seq is None:
+        payload_place_seq = find_payload_place_seq(master)
+        if payload_place_seq is None:
+            print("Could not determine payload-place seq. Pass --payload-place-seq explicitly. Exiting.")
+            return
+ 
+    state = STATE_WAITING_FOR_APPROACH
+    landed_wait_start = None
+    current_mission_seq = None
+    landed_state = LANDED_STATE_UNDEFINED
+ 
+    print(f"Monitoring. Target mission seq: {payload_place_seq}. State: {state}")
+ 
+    while state != STATE_DONE:
+        msg = master.recv_match(blocking=True, timeout=5)
+        if msg is None:
+            continue
+ 
+        msg_type = msg.get_type()
+ 
+        if msg_type == "MISSION_CURRENT":
+            current_mission_seq = msg.seq
+ 
+        elif msg_type == "EXTENDED_SYS_STATE":
+            landed_state = msg.landed_state
+ 
+        # --- state transitions ---
+ 
+        if state == STATE_WAITING_FOR_APPROACH:
+            if current_mission_seq == payload_place_seq:
+                print("Reached payload-place waypoint. Descending.")
+                trigger_aligner_start()
+                state = STATE_DESCENDING
+ 
+        elif state == STATE_DESCENDING:
+            if landed_state == LANDED_STATE_ON_GROUND:
+                print("Plane has landed and is holding. Watching for latch.")
+                landed_wait_start = time.time()
+                state = STATE_LANDED_WAITING
+ 
+        elif state == STATE_LANDED_WAITING:
+            if check_latch_status():
+                print("Latch confirmed by aligner.")
+                trigger_abort(master, args.abort_rc_channel)
+                state = STATE_DONE
+            elif time.time() - landed_wait_start > args.latch_timeout:
+                print(f"Latch timeout after {args.latch_timeout}s. Aborting and continuing mission.")
+                trigger_abort(master, args.abort_rc_channel)
+                state = STATE_DONE
+ 
+    print("Mediator finished.")
+ 
+ 
+# Making sure prevents main from running if imported into another script
+if __name__ == "__main__":
+    main()

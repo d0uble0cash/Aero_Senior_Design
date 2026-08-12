@@ -1,17 +1,22 @@
-# ArduPilot commands: Make sure your virtual enviroment is active while doing these commands. It
-# should say (venv-ardupilot) before your username if it is active. Otherwise, reopen your terminal.
-## Runs a regular degular plane at Apollo 11 airport with the proper parameterfile. Use PlaneTest
-## waypoints for this SITL instance
-alias arduSimPlane="sim_vehicle.py -v ArduPlane -w -L APOLLO11P --add-param-file=/home/$USER/.config/ardupilot/Autolanding.param"
-## Runs a quadplane frame SITL instance at Apollo 11 airport. Use the QuadTest waypoints.
-alias arduSimQuad="sim_vehicle.py -v ArduPlane -f quadplane -w -L APOLLO11P"
-## Runs a rover SITL instance at Apollo 11 airport. Made to be run alongside ONE of the other 2
-## plane instances (noted by the -I 1). Make use to use the Connections1 file to connect both
-## instances to Mission Planner
-alias arduSimRover="sim_vehicle.py -v Rover -w -I 1 -L APOLLO11R"
-
 # Enviroment commands
 ## For activating the ardu enviroment (assuming you have the SITL enviroment setup)
 alias aEnvArdu=". ~/venv-ardupilot/bin/activate"
 ## For activating my scripting enviroment (assuming you have this repo cloned in a repos folder)
 alias aEnvScripts=". ~/repos/Aero_Senior_Design/scripts/.venv_scripts/bin/activate"
+
+# ArduPilot commands: Make sure (venv-ardupilot) virtual enviroment is active while doing these
+# commands. It should say (venv-ardupilot) before your username if it is active. Otherwise, reopen
+# your terminal.
+## Runs a regular degular plane at Apollo 11 airport with the proper parameterfile. Use PlaneTest
+## waypoints for this SITL instance
+alias arduSimPlane="sim_vehicle.py -v ArduPlane -w -L APOLLO11P --add-param-file=/home/$USER/.config/ardupilot/Autolanding.param"
+## Runs a quadplane frame SITL instance at Apollo 11 airport. Use the QuadTest waypoints. The out
+## port is for the mediator script to read from, on top of the regular 2 ports this gives.
+alias arduSimQuad="sim_vehicle.py -v ArduPlane -f quadplane -w -L APOLLO11P -S 3 --add-param-file=/home/$USER/.config/ardupilot/QuadRC9LandAbort.param --out=127.0.0.1:14565"
+## Runs a rover SITL instance at Apollo 11 airport. Made to be run alongside ONE of the other 2
+## plane instances (noted by the -I 1). Make use to use the Connections1 file to connect both
+## instances to Mission Planner
+alias arduSimRover="sim_vehicle.py -v Rover -w -I 1 -L APOLLO11R"
+
+# Script commands: Make sure your virtual enviroment is active while doing these commands. It
+alias medStart="aEnvScripts && python3 ~/repos/Aero_Senior_Design/scripts/mediator.py --port 14565"
