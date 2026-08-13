@@ -1,18 +1,17 @@
-# THIS HASN'T BEEN TESTED YET. STILL PLAYING AROUND WITH
-
 import argparse
 import time
- 
+from aeroUtil import tPrint
+
 from pymavlink import mavutil
- 
+
 MAV_CMD_NAV_PAYLOAD_PLACE = 94
- 
+
 LANDED_STATE_UNDEFINED = 0
 LANDED_STATE_ON_GROUND = 1
 LANDED_STATE_IN_AIR = 2
 LANDED_STATE_TAKEOFF = 3
 LANDED_STATE_LANDING = 4
- 
+
 STATE_WAITING_FOR_APPROACH = "WAITING_FOR_APPROACH"
 STATE_DESCENDING = "DESCENDING"
 STATE_LANDED_WAITING = "LANDED_WAITING"
@@ -21,11 +20,11 @@ STATE_DONE = "DONE"
 
 def connect(ip: str, port: int):
     connection = f"udpin:{ip}:{port}"
-    print(f"Connecting: {connection}")
+    tPrint(f"Connecting: {connection}")
     master = mavutil.mavlink_connection(connection)
-    print("Waiting for heartbeat...")
+    tPrint("Waiting for heartbeat...")
     master.wait_heartbeat()
-    print(f"Heartbeat OK: system={master.target_system} component={master.target_component}")
+    tPrint(f"Heartbeat OK: system={master.target_system} component={master.target_component}")
     return master
 
 
@@ -46,11 +45,11 @@ def request_message_interval(master, message_id: int, hz: float):
 # Returns the waypoint number with MAV_CMD_NAV_PAYLOAD_PLACE command, or None if not found
 # This does download the mission from the ArduPilot instance on the plane
 def find_payload_place_seq(master, timeout=10) -> int:
-    print("Requesting mission list to auto-detect payload-place item...")
+    tPrint("Requesting mission list to auto-detect payload-place item...")
     master.mav.mission_request_list_send(master.target_system, master.target_component)
     msg = master.recv_match(type="MISSION_COUNT", blocking=True, timeout=timeout)
     if msg is None:
-        print("No MISSION_COUNT received; skipping auto-detect.")
+        tPrint("No MISSION_COUNT received; skipping auto-detect.")
         return None
  
     count = msg.count
@@ -65,9 +64,9 @@ def find_payload_place_seq(master, timeout=10) -> int:
             break
  
     if found_seq is not None:
-        print(f"Found NAV_VTOL_PAYLOAD_PLACE at mission seq {found_seq}")
+        tPrint(f"Found NAV_VTOL_PAYLOAD_PLACE at mission seq {found_seq}")
     else:
-        print("NAV_VTOL_PAYLOAD_PLACE not found in mission.")
+        tPrint("NAV_VTOL_PAYLOAD_PLACE not found in mission.")
     return found_seq
 
 
@@ -77,19 +76,19 @@ def trigger_abort(master, channel: int, hold_seconds: float = 1.0, num_channels:
     values = [0] * num_channels
     values[channel - 1] = 2000  # "high" position
  
-    print(f"Triggering abort on RC channel {channel} (high)...")
+    tPrint(f"Triggering abort on RC channel {channel} (high)...")
     master.mav.rc_channels_override_send(master.target_system, master.target_component, *values)
  
     time.sleep(hold_seconds)
  
     values[channel - 1] = 0  # release override on this channel
     master.mav.rc_channels_override_send(master.target_system, master.target_component, *values)
-    print("RC override released.")
+    tPrint("RC override released.")
 
 
 # Sends message to rover to start alignment. Still need to look into how to connect laptop to rover
 def trigger_aligner_start():
-    print("[STUB] Would signal aligner script to begin approach/alignment.")
+    tPrint("[STUB] Would signal aligner script to begin approach/alignment.")
 
 
 # Currently returns just false since I don't have any logic for this yet
@@ -102,11 +101,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ip", default="127.0.0.1")
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--payload-place-seq", type=int, default=None,
+    parser.add_argument("-s", "--payload-place-seq", type=int, default=None,
                          help="Mission seq of NAV_VTOL_PAYLOAD_PLACE item. Auto-detected if omitted.")
-    parser.add_argument("--abort-rc-channel", type=int, default=9,
+    parser.add_argument("-a", "--abort-rc-channel", type=int, default=9,
                          help="RC channel number mapped to RCx_OPTION=173.")
-    parser.add_argument("--latch-timeout", type=float, default=30.0,
+    parser.add_argument("-t", "--latch-timeout", type=float, default=30.0,
                          help="Seconds to wait for latch confirmation once landed.")
     args = parser.parse_args()
  
@@ -119,7 +118,7 @@ def main():
     if payload_place_seq is None:
         payload_place_seq = find_payload_place_seq(master)
         if payload_place_seq is None:
-            print("Could not determine payload-place seq. Pass --payload-place-seq explicitly. Exiting.")
+            tPrint("Could not determine payload-place seq. Pass --payload-place-seq explicitly. Exiting.")
             return
  
     state = STATE_WAITING_FOR_APPROACH
@@ -127,7 +126,7 @@ def main():
     current_mission_seq = None
     landed_state = LANDED_STATE_UNDEFINED
  
-    print(f"Monitoring. Target mission seq: {payload_place_seq}. State: {state}")
+    tPrint(f"Monitoring. Target mission seq: {payload_place_seq}. State: {state}")
  
     while state != STATE_DONE:
         msg = master.recv_match(blocking=True, timeout=5)
@@ -146,27 +145,27 @@ def main():
  
         if state == STATE_WAITING_FOR_APPROACH:
             if current_mission_seq == payload_place_seq:
-                print("Reached payload-place waypoint. Descending.")
+                tPrint("Reached payload-place waypoint. Descending.")
                 trigger_aligner_start()
                 state = STATE_DESCENDING
  
         elif state == STATE_DESCENDING:
             if landed_state == LANDED_STATE_ON_GROUND:
-                print("Plane has landed and is holding. Watching for latch.")
+                tPrint("Plane has landed and is holding. Watching for latch.")
                 landed_wait_start = time.time()
                 state = STATE_LANDED_WAITING
  
         elif state == STATE_LANDED_WAITING:
             if check_latch_status():
-                print("Latch confirmed by aligner.")
+                tPrint("Latch confirmed by aligner.")
                 trigger_abort(master, args.abort_rc_channel)
                 state = STATE_DONE
             elif time.time() - landed_wait_start > args.latch_timeout:
-                print(f"Latch timeout after {args.latch_timeout}s. Aborting and continuing mission.")
+                tPrint(f"Latch timeout after {args.latch_timeout}s. Aborting and continuing mission.")
                 trigger_abort(master, args.abort_rc_channel)
                 state = STATE_DONE
  
-    print("Mediator finished.")
+    tPrint("Mediator finished.")
  
  
 # Making sure prevents main from running if imported into another script
