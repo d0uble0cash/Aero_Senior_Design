@@ -2,9 +2,10 @@ import time
 import keyboard
 from pymavlink import mavutil
 
-# --- CONFIGURATION ---
-CONNECTION_STRING = 'COM4'
-BAUD_RATE = 9600
+# --- CONFIGURATION (Swap comments as needed, COM referes to usb inputs, tcp are wireless network inputs)---
+# CONNECTION_STRING = 'COM4'
+CONNECTION_STRING = 'tcp:192.168.2.1:5760'
+BAUD_RATE = 115200
 
 # PWM values for brushed motor ESCs
 PWM_NEUTRAL = 1500
@@ -43,7 +44,7 @@ def set_rc_channels(master, ch1, ch2, ch3):
         master.target_system, master.target_component,
         ch1,      # Channel 1 (Motor 1)
         ch2,      # Channel 2 (Motor 2)
-        ch3,    # Channel 3 (Motor 3)
+        ch3,      # Channel 3 (Motor 3)
         65535,    # Channel 4 
         65535,    # Channel 5 
         65535,    # Channel 6 
@@ -73,7 +74,7 @@ def main():
                 print("Exiting...")
                 break
             
-            # --- Motor 1 Logic ---
+            # --- Motor 1/3 Logic (Rear Wheels) ---
             if keyboard.is_pressed('w'):
                 pwm1 = PWM_FORWARD
                 pwm3 = PWM_FORWARD
@@ -81,7 +82,7 @@ def main():
                 pwm1 = PWM_REVERSE
                 pwm3 = PWM_REVERSE
                 
-            # --- Motor 2 Logic ---
+            # --- Motor 2 Logic (Front Wheels) ---
             if keyboard.is_pressed('up'):
                 pwm2 = PWM_FORWARD
             elif keyboard.is_pressed('down'):
