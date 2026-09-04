@@ -1,6 +1,8 @@
+# Example usage: python mediator.py --port 14565
+
 import argparse
 import time
-from aeroUtil import tPrint
+from helpers.aeroUtil import tPrint
 
 from pymavlink import mavutil
 
@@ -18,6 +20,8 @@ STATE_LANDED_WAITING = "LANDED_WAITING"
 STATE_DONE = "DONE"
 
 
+# This is just for the MAVLink connection from plane
+# Need to include one for rover for ssh/MAVLink
 def connect(ip: str, port: int):
     connection = f"udpin:{ip}:{port}"
     tPrint(f"Connecting: {connection}")
