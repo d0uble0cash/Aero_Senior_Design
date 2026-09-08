@@ -168,10 +168,10 @@ def main():
                 tPrint(f"Latch timeout after {args.latch_timeout}s. Aborting and continuing mission.")
                 trigger_abort(master, args.abort_rc_channel)
                 state = STATE_DONE
- 
+
     tPrint("Mediator finished.")
- 
- 
+
+
 # Making sure prevents main from running if imported into another script
 if __name__ == "__main__":
     main()
