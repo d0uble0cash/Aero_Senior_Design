@@ -1,17 +1,19 @@
 #include <iostream>
 #include <string>
-
-// for Windows
+#include <mutex>
+#include <thread>
+#include <atomic>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <conio.h>
-
-// #include <netdb.h> // for linux
-
+// #include <conio.h>
 #include <libssh2.h>
 using namespace std;
 
-static const char *raspIP = "10.109.70.209";
+mutex sshMutex;
+atomic<bool> running{true};
+
+// Change this to whatever you are using, will eventually be able to change through the GUI
+// static const char *raspIP = "10.109.70.209";
 static const char *raspHostName = "ieeeRasp";
 static const char *username = "user_ieee";
 static const char *pass = "pass_ieee8333";
@@ -25,6 +27,35 @@ void printWinsockError(const char* func) {
         (LPSTR)&msgBuf, 0, nullptr);
     printf("%s failed: %d (%s)\n", func, err, msgBuf ? msgBuf : "unknown error");
     LocalFree(msgBuf);
+}
+
+void readerThreadFunc(LIBSSH2_CHANNEL* channel){
+    char buf[4096];
+    while (running.load()){
+        ssize_t n;
+        {
+            lock_guard<mutex> lock(sshMutex);
+            n = libssh2_channel_read(channel, buf, sizeof(buf));
+        } // releases lock after this
+
+        if (n > 0) {
+            fwrite(buf, 1, n, stdout);
+            fflush(stdout);
+            continue;
+        }
+
+        if (n == LIBSSH2_ERROR_EAGAIN) {
+            this_thread::sleep_for(chrono::milliseconds(20));
+            continue;
+        }
+
+        lock_guard<mutex> lock(sshMutex);
+        if (libssh2_channel_eof(channel)) {
+            printf("[remote shell closed]\n");
+            running.store(false);
+            break;
+        }
+    }
 }
 
 int main() {
@@ -42,9 +73,9 @@ int main() {
     // resolve "host" into an actual IP address
     struct addrinfo hints{};
     struct addrinfo *result;
-    hints.ai_family = AF_INET;      // IPv4
+    hints.ai_family = AF_INET;       // IPv4
     hints.ai_socktype = SOCK_STREAM; // TCP
-    iResult = getaddrinfo(raspIP, "22", &hints, &result);
+    iResult = getaddrinfo(raspHostName, "22", &hints, &result);
     if (iResult != 0) {
         printf("getaddrinfo failed: %d (%s)\n", iResult, gai_strerrorA(iResult));
         return 1;
@@ -63,7 +94,7 @@ int main() {
         return 1;
     }
 
-    // This could be a little finicky, so give it time between runs
+    // This could be a little finicky, so give time between code runs
     libssh2_init(0);
     LIBSSH2_SESSION* session = libssh2_session_init();
     if (!session) {
@@ -95,19 +126,6 @@ int main() {
     }
     printf("Channel Opened!\n");
 
-    // rc = libssh2_channel_exec(channel, "ls -la");
-    // if (rc != 0) {
-    //     printf("channel_exec failed: %d\n", rc);
-    //     return 1;
-    // }
-    // printf("Channel command sent!\n");
-
-    // char buf[4096];
-    // ssize_t n;
-    // while ((n = libssh2_channel_read(channel, buf, sizeof(buf))) > 0) {
-    //     fwrite(buf, 1, n, stdout);
-    // }
-
     // Pseudo channel for persistance
     rc = libssh2_channel_request_pty(channel, "xterm");
     if (rc != 0) {
@@ -123,33 +141,27 @@ int main() {
     printf("Interactive shell started!\n");
 
     libssh2_session_set_blocking(session, 0);
+    thread reader(readerThreadFunc, channel);
 
-    char buf[4096];
-    std::string inputLine;
-
-    while (true) {
-        ssize_t n = libssh2_channel_read(channel, buf, sizeof(buf));
-        if (n > 0) {
-            fwrite(buf, 1, n, stdout);
-            fflush(stdout);
-        } else if (n < 0 && n != LIBSSH2_ERROR_EAGAIN) {
-            printf("read error: %zd\n", n);
-            break;
-        }
-
-        if (libssh2_channel_eof(channel)) {
-            printf("[remote shell closed]\n");
-            break;
-        }
-
-        // This is kind of finicky I believe, but works fine for now until
-        // I get started on multi-threading
-        if (_kbhit()) {
-            getline(cin, inputLine);
-            string toSend = inputLine + "\n";
+    while (running.load()) {
+        {
+            lock_guard<mutex> lock(sshMutex);
+            string toSend = "ls\n";
             libssh2_channel_write(channel, toSend.c_str(), toSend.size());
         }
+        this_thread::sleep_for(chrono::milliseconds(20));
+        {
+            lock_guard<mutex> lock(sshMutex);
+            string toSend = "exit\n";
+            libssh2_channel_write(channel, toSend.c_str(), toSend.size());
+        }
+        break;
     }
+    while (running.load()) {
+        this_thread::sleep_for(chrono::milliseconds(20));
+    }
+
+    reader.join();
 
     // Clean Up
     libssh2_channel_close(channel);
