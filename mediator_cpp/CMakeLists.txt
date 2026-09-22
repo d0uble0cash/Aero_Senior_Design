@@ -14,4 +14,8 @@ add_executable(mediator_cpp
 target_link_libraries(mediator_cpp
     PRIVATE
         libssh2::libssh2
+
 )
+if(WIN32)
+    target_link_libraries(mediator_cpp PRIVATE ws2_32)
+endif()
